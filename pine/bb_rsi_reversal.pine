@@ -1,0 +1,50 @@
+//@version=6
+// Bollinger Bands + RSI reversal signal.
+// Short: previous candle reached the upper band with RSI overbought,
+//        and the current candle closes back inside the bands.
+// Long:  previous candle reached the lower band with RSI oversold,
+//        and the current candle closes back inside the bands.
+// Stop:   beyond the extreme of the two candles. Target: the middle band.
+indicator("BB + RSI reversal", overlay = true, max_labels_count = 100)
+
+// Inputs
+bbLen  = input.int(20,    "Bollinger length")
+bbMult = input.float(2.0, "Bollinger std dev", step = 0.1)
+rsiLen = input.int(14,    "RSI length")
+rsiOB  = input.int(70,    "RSI overbought")
+rsiOS  = input.int(30,    "RSI oversold")
+
+// Indicators
+[basis, upper, lower] = ta.bb(close, bbLen, bbMult)
+rsi = ta.rsi(close, rsiLen)
+
+plot(basis, "Middle band", color = color.blue)
+plot(upper, "Upper band",  color = color.red)
+plot(lower, "Lower band",  color = color.teal)
+
+// Signals, evaluated only when the candle has closed
+closedInside = close < upper and close > lower
+shortSignal  = barstate.isconfirmed and high[1] >= upper[1] and rsi[1] > rsiOB and closedInside
+longSignal   = barstate.isconfirmed and low[1]  <= lower[1] and rsi[1] < rsiOS and closedInside
+
+// Stop and target levels
+shortStop = math.max(high, high[1])
+longStop  = math.min(low,  low[1])
+target    = basis
+
+// Current RSI shown in a box, so no separate RSI indicator is needed
+var table rsiBox = table.new(position.top_right, 1, 1)
+if barstate.islast
+    boxColor = rsi > rsiOB ? color.red : rsi < rsiOS ? color.teal : color.gray
+    table.cell(rsiBox, 0, 0, "RSI " + str.tostring(rsi, "#.0"), text_color = color.white, bgcolor = boxColor)
+
+plotshape(shortSignal, "Short signal", shape.triangledown, location.abovebar, color.red,  size = size.small)
+plotshape(longSignal,  "Long signal",  shape.triangleup,   location.belowbar, color.teal, size = size.small)
+
+if shortSignal
+    label.new(bar_index, high, "SHORT\nSL " + str.tostring(shortStop, format.mintick) + "\nTP " + str.tostring(target, format.mintick), style = label.style_label_down, color = color.red, textcolor = color.white, size = size.small)
+    alert("SHORT " + syminfo.ticker + " | entry " + str.tostring(close, format.mintick) + " | SL " + str.tostring(shortStop, format.mintick) + " | TP " + str.tostring(target, format.mintick), alert.freq_once_per_bar_close)
+
+if longSignal
+    label.new(bar_index, low, "LONG\nSL " + str.tostring(longStop, format.mintick) + "\nTP " + str.tostring(target, format.mintick), style = label.style_label_up, color = color.teal, textcolor = color.white, size = size.small)
+    alert("LONG " + syminfo.ticker + " | entry " + str.tostring(close, format.mintick) + " | SL " + str.tostring(longStop, format.mintick) + " | TP " + str.tostring(target, format.mintick), alert.freq_once_per_bar_close)
